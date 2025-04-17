@@ -1,0 +1,107 @@
+/* Custom Styles */
+body {
+    font-family: 'Inter', sans-serif;
+    /* Light mode default */
+    background-color: #f3f4f6; /* bg-gray-100 */
+    color: #1f2937; /* text-gray-800 */
+}
+/* Dark mode styles */
+html.dark body {
+    background-color: #111827; /* bg-gray-900 */
+    color: #f9fafb; /* text-gray-50 */
+}
+
+.tab-button.active {
+    background-color: #3b82f6; /* bg-blue-600 */
+    color: white;
+}
+html.dark .tab-button.active {
+     background-color: #2563eb; /* bg-blue-700 */
+}
+.tab-button {
+    transition: background-color 0.2s ease-in-out, color 0.2s ease-in-out;
+     /* Light mode default */
+     color: #374151; /* text-gray-700 */
+}
+ html.dark .tab-button {
+     color: #d1d5db; /* text-gray-300 */
+ }
+ html.dark .tab-button:hover {
+     background-color: #374151; /* dark:hover:bg-gray-700 */
+ }
+
+#notification-area {
+    transition: opacity 0.5s ease-in-out, transform 0.5s ease-in-out;
+}
+#notification-area.hidden {
+    opacity: 0;
+    transform: translateY(-20px);
+}
+/* Card styles */
+.exercise-card {
+     background-color: white;
+     border-color: #e5e7eb; /* border-gray-200 */
+}
+ html.dark .exercise-card {
+     background-color: #1f2937; /* dark:bg-gray-800 */
+     border-color: #4b5563; /* dark:border-gray-600 */
+ }
+.exercise-card.completed {
+     /* Light */
+     background-color: #f0fdf4; /* bg-green-50 */
+     border-color: #bbf7d0; /* border-green-200 */
+}
+ html.dark .exercise-card.completed {
+     background-color: #166534; /* dark:bg-green-800 */
+     border-color: #4ade80; /* dark:border-green-500 */
+ }
+ /* Set row styles */
+ .set-row {
+     background-color: #f9fafb; /* bg-gray-50 */
+ }
+  html.dark .set-row {
+     background-color: #374151; /* dark:bg-gray-700 */
+ }
+.set-row.completed {
+     background-color: #dcfce7; /* bg-green-100 */
+}
+ html.dark .set-row.completed {
+     background-color: #15803d; /* dark:bg-green-700 */
+ }
+ /* Input styles */
+ input[type=text], input[type=number], select {
+      background-color: white;
+      border-color: #d1d5db; /* border-gray-300 */
+      color: #1f2937; /* text-gray-800 */
+ }
+  html.dark input[type=text], html.dark input[type=number], html.dark select {
+      background-color: #4b5563; /* dark:bg-gray-600 */
+      border-color: #6b7280; /* dark:border-gray-500 */
+      color: #f9fafb; /* dark:text-gray-50 */
+  }
+   html.dark input::placeholder {
+       color: #9ca3af; /* dark:placeholder-gray-400 */
+   }
+   html.dark select option {
+        background-color: #4b5563; /* Match select background */
+        color: #f9fafb;
+   }
+/* Sticky timer */
+#timer-display-container {
+    position: sticky;
+    bottom: 1rem;
+    z-index: 10;
+}
+ #timer-display-container > div { /* Style the timer card itself */
+      background-color: rgba(255, 255, 255, 0.95);
+      backdrop-filter: blur(4px);
+ }
+  html.dark #timer-display-container > div {
+      background-color: rgba(31, 41, 55, 0.95); /* dark:bg-gray-800 with opacity */
+      border-color: #4b5563; /* dark:border-gray-600 */
+  }
+
+/* Hide number input arrows */
+input[type=number]::-webkit-inner-spin-button,
+input[type=number]::-webkit-outer-spin-button { -webkit-appearance: none; margin: 0; }
+input[type=number] { -moz-appearance: textfield; }

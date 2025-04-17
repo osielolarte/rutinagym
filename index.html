@@ -1,0 +1,88 @@
+<!DOCTYPE html>
+<html lang="es" class="">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Control de Rutina (4 Días)</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="style.css">
+    <link rel="icon" href="./logo.jpg" type="image/jpeg">
+</head>
+<body class="">
+
+    <div class="p-4 md:p-6 lg:p-8 max-w-4xl mx-auto">
+
+        <div id="notification-area" class="fixed top-4 right-4 z-50 hidden max-w-sm w-full">
+             <div id="notification-content" class="p-4 rounded-md shadow-lg text-sm border w-full" role="alert">
+                 <strong id="notification-title" class="font-semibold block mb-1"></strong>
+                 <p id="notification-message"></p>
+             </div>
+         </div>
+
+        <div class="flex justify-between items-center mb-4 bg-white dark:bg-gray-800 p-3 rounded-lg shadow-sm">
+            <button id="prev-week-btn" class="p-2 rounded hover:bg-gray-100 dark:hover:bg-gray-700 disabled:opacity-50 disabled:cursor-not-allowed text-gray-600 dark:text-gray-300" title="Semana Anterior">
+                <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"></polyline></svg>
+            </button>
+            <h1 id="main-title" class="text-xl md:text-2xl font-bold text-center text-gray-800 dark:text-gray-100">
+                </h1>
+            <div class="flex items-center gap-2">
+                 <button id="dark-mode-toggle" class="p-2 rounded hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-600 dark:text-gray-300" title="Cambiar Modo">
+                     <span id="dark-icon" class="hidden">
+                         <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"></path></svg>
+                     </span>
+                      <span id="light-icon" class="hidden">
+                         <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="5"></circle><line x1="12" y1="1" x2="12" y2="3"></line><line x1="12" y1="21" x2="12" y2="23"></line><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"></line><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"></line><line x1="1" y1="12" x2="3" y2="12"></line><line x1="21" y1="12" x2="23" y2="12"></line><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"></line><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"></line></svg>
+                      </span>
+                 </button>
+                 <button id="next-week-btn" class="p-2 rounded hover:bg-gray-100 dark:hover:bg-gray-700 disabled:opacity-50 disabled:cursor-not-allowed text-gray-600 dark:text-gray-300" title="Semana Siguiente">
+                     <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"></polyline></svg>
+                </button>
+            </div>
+        </div>
+
+        <div class="mb-6 bg-white dark:bg-gray-800 p-1 rounded-lg shadow-sm">
+            <div class="grid w-full grid-cols-2 sm:grid-cols-4 gap-1">
+                <button id="tab-upperA" data-day="upperA" class="tab-button py-2 px-3 sm:px-4 rounded-md text-xs sm:text-sm font-medium hover:bg-gray-100 active">Superior A</button>
+                <button id="tab-lowerA" data-day="lowerA" class="tab-button py-2 px-3 sm:px-4 rounded-md text-xs sm:text-sm font-medium hover:bg-gray-100">Inferior A</button>
+                <button id="tab-upperB" data-day="upperB" class="tab-button py-2 px-3 sm:px-4 rounded-md text-xs sm:text-sm font-medium hover:bg-gray-100">Superior B</button>
+                <button id="tab-lowerB" data-day="lowerB" class="tab-button py-2 px-3 sm:px-4 rounded-md text-xs sm:text-sm font-medium hover:bg-gray-100">Inferior B</button>
+            </div>
+        </div>
+
+        <div id="exercise-list" class="space-y-4">
+            <p class="text-gray-500 dark:text-gray-400 text-center">Cargando ejercicios...</p>
+            </div>
+
+        <div id="timer-display-container" class="mt-6">
+             </div>
+
+        <div class="flex flex-col sm:flex-row justify-center items-center gap-4 mt-8 mb-8">
+            <button id="save-workout-btn" class="w-full sm:w-auto flex items-center justify-center gap-2 px-6 py-3 bg-green-600 hover:bg-green-700 text-white font-semibold rounded-lg shadow-md transition duration-150 ease-in-out">
+                <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"></path><polyline points="17 21 17 13 7 13 7 21"></polyline><polyline points="7 3 7 8 15 8"></polyline></svg>
+                Guardar Rutina
+            </button>
+            <button id="clear-workout-btn" class="w-full sm:w-auto flex items-center justify-center gap-2 px-6 py-3 bg-white dark:bg-gray-700 hover:bg-gray-100 dark:hover:bg-gray-600 text-gray-700 dark:text-gray-200 font-semibold border border-gray-300 dark:border-gray-600 rounded-lg shadow-sm transition duration-150 ease-in-out">
+                <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path><line x1="10" y1="11" x2="10" y2="17"></line><line x1="14" y1="11" x2="14" y2="17"></line></svg>
+                Limpiar Actual
+            </button>
+        </div>
+
+        <div>
+            <h2 class="text-xl md:text-2xl font-semibold mb-4 flex items-center gap-2 text-gray-800 dark:text-gray-100">
+                 <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 4v6h6"></path><path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10"></path></svg>
+                 Historial
+            </h2>
+            <div id="history-list" class="space-y-3">
+                <p class="text-gray-500 dark:text-gray-400">Cargando historial...</p>
+                </div>
+        </div>
+
+    </div>
+
+    <script src="script.js"></script>
+
+</body>
+</html>
