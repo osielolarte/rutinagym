@@ -174,7 +174,7 @@ const initializeWorkoutLog = (exercises) => {
             completed: false,
             sets: Array.from({ length: numSets }, () => ({ weight: '', reps: '', completed: false })),
             notes: '',
-            substitutionUsed: null,
+            substitutionUsed: null, // Initialize substitution as null
         };
     });
     return initialLog;
@@ -182,25 +182,33 @@ const initializeWorkoutLog = (exercises) => {
 
 const getCurrentExercises = (week, day) => {
     const programWeekData = program.find(p => p.week === week);
+    // Fallback logic: if current week data doesn't exist, use last defined week, or first week.
     const fallbackWeekData = programWeekData || program[program.length - 1] || program[0];
     // Use the specific day key (upperA, lowerA, etc.)
     if (fallbackWeekData && fallbackWeekData.days && fallbackWeekData.days[day]) {
          return fallbackWeekData.days[day];
     }
+    // Return empty array if no exercises found for the day/week
     return [];
 };
 
 const parseRestTime = (restString) => {
-     if (!restString || typeof restString !== 'string') return 90;
+     // Handle potential null/undefined/non-string input
+     if (!restString || typeof restString !== 'string') return 90; // Default rest time
+     // Handle "0 min" specifically for supersets
      if (restString.toLowerCase().includes("0 min")) return 0;
+     // Try to extract minutes using regex
      const match = restString.match(/(\d+(\.\d+)?)\s*min/);
+     // Convert matched minutes to seconds, default if no match
      return match ? Math.round(parseFloat(match[1]) * 60) : 90;
 };
 
 const formatTime = (totalSeconds) => {
+     // Ensure input is a non-negative finite number
      if (!Number.isFinite(totalSeconds) || totalSeconds < 0) return "0:00";
      const minutes = Math.floor(totalSeconds / 60);
      const seconds = totalSeconds % 60;
+     // Pad seconds with leading zero if needed
      return `${minutes}:${seconds < 10 ? '0' : ''}${seconds}`;
 };
 
@@ -209,29 +217,38 @@ const applyDarkMode = (isDark) => {
     state.darkMode = isDark;
     if (isDark) {
         document.documentElement.classList.add('dark');
-        darkIcon?.classList.remove('hidden'); // Add null check
-        lightIcon?.classList.add('hidden'); // Add null check
+        darkIcon?.classList.remove('hidden'); // Show dark icon
+        lightIcon?.classList.add('hidden');  // Hide light icon
     } else {
         document.documentElement.classList.remove('dark');
-        darkIcon?.classList.add('hidden'); // Add null check
-        lightIcon?.classList.remove('hidden'); // Add null check
+        darkIcon?.classList.add('hidden');   // Hide dark icon
+        lightIcon?.classList.remove('hidden');// Show light icon
     }
 };
 
 const toggleDarkMode = () => {
     const newDarkModeState = !state.darkMode;
     applyDarkMode(newDarkModeState);
+    // Save preference to localStorage
     try {
          localStorage.setItem('darkMode', newDarkModeState ? 'true' : 'false');
     } catch (e) {
          console.error("Error saving dark mode preference:", e);
+         // Optionally notify user if saving fails
     }
 };
 
 const loadDarkModePreference = () => {
-     let preference = localStorage.getItem('darkMode');
+     let preference = null;
+     try {
+         preference = localStorage.getItem('darkMode');
+     } catch (e) {
+         console.error("Error reading dark mode preference from localStorage:", e);
+     }
+
      let isDark;
      if (preference !== null) {
+         // Use saved preference
          isDark = preference === 'true';
      } else {
          // Default to system preference if no setting saved
@@ -243,86 +260,123 @@ const loadDarkModePreference = () => {
 
 // --- Local Storage Functions ---
 const loadHistory = () => {
-     const savedHistory = localStorage.getItem('workoutHistory');
-    try {
-        state.history = savedHistory ? JSON.parse(savedHistory) : [];
-        if (!Array.isArray(state.history)) state.history = [];
-    } catch (e) {
-        console.error("Error loading history from localStorage:", e);
-        state.history = [];
-    }
+     let savedHistory = null;
+     try {
+         savedHistory = localStorage.getItem('workoutHistory');
+         state.history = savedHistory ? JSON.parse(savedHistory) : [];
+         // Basic validation: ensure it's an array
+         if (!Array.isArray(state.history)) {
+             console.warn("Invalid history found in localStorage, resetting.");
+             state.history = [];
+         }
+     } catch (e) {
+         console.error("Error loading or parsing history from localStorage:", e);
+         state.history = []; // Reset history on error
+     }
 };
 const saveHistory = () => {
     try {
+         // Ensure history is an array before saving
+         if (!Array.isArray(state.history)) {
+             console.error("Attempted to save invalid history state. Resetting before save.");
+             state.history = [];
+         }
          localStorage.setItem('workoutHistory', JSON.stringify(state.history));
      } catch (e) {
          console.error("Error saving history to localStorage:", e);
+         // Notify user about the saving error, potentially due to storage limits
          showNotification("Error al guardar el historial. Posiblemente almacenamiento lleno.", "error");
      }
 };
 const loadWorkoutLog = () => {
     const exercises = getCurrentExercises(state.currentWeek, state.currentDay);
     const storageKey = getLocalStorageKey(state.currentWeek, state.currentDay);
-    const savedLog = localStorage.getItem(storageKey);
+    let savedLog = null;
+
+    try {
+        savedLog = localStorage.getItem(storageKey);
+    } catch (e) {
+        console.error(`Error reading workout log from localStorage for ${storageKey}:`, e);
+        state.workoutLog = initializeWorkoutLog(exercises); // Initialize fresh on read error
+        return;
+    }
+
     if (savedLog) {
         try {
             const parsedLog = JSON.parse(savedLog);
             let isValid = true;
-            // Basic validation: check if exercise names from current program exist as keys
+
+            // Basic validation: check if exercise names from current program exist as keys in the log
+            // and if their 'sets' property is an array.
             if (exercises.length > 0) {
                 for (const exercise of exercises) {
-                    if (!exercise || !exercise.name) continue;
+                    if (!exercise || !exercise.name) continue; // Skip invalid exercise definitions
+                    // Check if the exercise exists in the log and has a valid 'sets' array
                     if (!parsedLog[exercise.name] || !Array.isArray(parsedLog[exercise.name].sets)) {
                         isValid = false;
-                        break;
+                        break; // Found an invalid entry, no need to check further
                     }
+                    // Optional: Deeper validation - check if set count matches definition?
+                    // const expectedSets = exercise.sets * (exercise.isPerLeg || exercise.isPerArm ? 2 : 1);
+                    // if (parsedLog[exercise.name].sets.length !== expectedSets) isValid = false;
                 }
             } else if (Object.keys(parsedLog).length > 0) {
-                // If no exercises are defined for the day, the log should be empty
+                // If no exercises are defined for the day, the log should ideally be empty
                 isValid = false;
             }
 
             if (isValid) {
                 state.workoutLog = parsedLog;
             } else {
-                // If log is invalid or doesn't match, initialize a fresh one
+                // If log is invalid or doesn't match the current program structure, initialize a fresh one
                 console.warn(`Invalid or outdated log found for ${storageKey}. Initializing new log.`);
                 state.workoutLog = initializeWorkoutLog(exercises);
             }
         } catch (error) {
+            // Handle JSON parsing errors
             console.error(`Failed to parse workout log from localStorage for ${storageKey}:`, error);
             state.workoutLog = initializeWorkoutLog(exercises);
         }
     } else {
-        // No log found, initialize a fresh one
+        // No log found in storage, initialize a fresh one
         state.workoutLog = initializeWorkoutLog(exercises);
     }
 };
 const saveWorkoutLog = () => {
+    // Only save if the workout log is not empty
     if (Object.keys(state.workoutLog).length > 0) {
         const storageKey = getLocalStorageKey(state.currentWeek, state.currentDay);
          try {
              localStorage.setItem(storageKey, JSON.stringify(state.workoutLog));
          } catch (e) {
              console.error("Error saving workout log:", e);
-             showNotification("Error al guardar progreso.", "error");
+             // Notify the user that saving failed
+             showNotification("Error al guardar progreso actual. Cambios podrían perderse.", "error");
          }
     }
 };
 const clearWorkoutLogFromStorage = () => {
      const storageKey = getLocalStorageKey(state.currentWeek, state.currentDay);
-     localStorage.removeItem(storageKey);
+     try {
+         localStorage.removeItem(storageKey);
+     } catch (e) {
+         console.error(`Error removing workout log from localStorage for ${storageKey}:`, e);
+         // Optionally notify user if removal fails
+     }
 };
 
 // --- Notification Function ---
 const showNotification = (message, type = 'info', duration = 3000) => {
+     // Clear any existing notification timeout to prevent overlaps
      if (state.notificationTimeoutId) {
          clearTimeout(state.notificationTimeoutId);
      }
+
+    // Set notification message and title based on type
     notificationMessage.textContent = message;
-    // Reset classes first
+    // Reset classes first to remove previous styling
     notificationContent.className = 'p-4 rounded-md shadow-lg text-sm border w-full';
-    // Add type-specific classes
+    // Add type-specific classes for styling
     if (type === 'success') {
         notificationTitle.textContent = 'Éxito';
         notificationContent.classList.add('bg-green-100', 'text-green-800', 'border-green-300', 'dark:bg-green-900', 'dark:text-green-100', 'dark:border-green-700');
@@ -333,21 +387,23 @@ const showNotification = (message, type = 'info', duration = 3000) => {
         notificationTitle.textContent = 'Información';
         notificationContent.classList.add('bg-blue-100', 'text-blue-800', 'border-blue-300', 'dark:bg-blue-900', 'dark:text-blue-100', 'dark:border-blue-700');
     }
-    // Animate in
+
+    // Animate the notification in
     notificationArea.classList.remove('hidden');
-    // Force reflow to apply transition
+    // Force reflow/repaint to ensure transition starts correctly
     void notificationArea.offsetWidth;
     notificationArea.style.opacity = '1';
     notificationArea.style.transform = 'translateY(0)';
-    // Set timeout to animate out
+
+    // Set timeout to animate the notification out
     state.notificationTimeoutId = setTimeout(() => {
         notificationArea.style.opacity = '0';
         notificationArea.style.transform = 'translateY(-20px)';
-        // Hide completely after transition ends
+        // Hide the element completely after the transition ends
         setTimeout(() => {
             notificationArea.classList.add('hidden');
-            state.notificationTimeoutId = null;
-        }, 500); // Match transition duration
+            state.notificationTimeoutId = null; // Clear the timeout ID
+        }, 500); // This duration should match the CSS transition duration
     }, duration);
 };
 
@@ -356,61 +412,62 @@ const renderExercises = () => {
     exerciseListContainer.innerHTML = ''; // Clear previous exercises
     const exercises = getCurrentExercises(state.currentWeek, state.currentDay);
 
+    // Handle case where no exercises are defined for the current selection
     if (!Array.isArray(exercises) || exercises.length === 0) {
         exerciseListContainer.innerHTML = `<p class="text-gray-500 dark:text-gray-400 text-center mt-8">No hay ejercicios definidos para la Semana ${state.currentWeek}, Día ${getDisplayDayName(state.currentDay)}.</p>`;
         return;
     }
 
     exercises.forEach((exercise) => {
-         // Ensure exercise object and name are valid
+         // Basic validation for exercise definition
          if (!exercise || !exercise.name) {
              console.error("Skipping invalid exercise object during render:", exercise);
              return;
          }
 
-         // Ensure log data exists for this exercise, initialize if not
+         // Ensure log data exists for this exercise; initialize if missing
          let currentLogData = state.workoutLog[exercise.name];
          if (!currentLogData) {
-             const tempInit = initializeWorkoutLog([exercise]); // Initialize just this one
+             const tempInit = initializeWorkoutLog([exercise]); // Initialize only this exercise
              state.workoutLog[exercise.name] = tempInit[exercise.name];
              currentLogData = state.workoutLog[exercise.name];
-              // Double check initialization worked
+              // If initialization failed (shouldn't happen with current logic, but good practice)
               if (!currentLogData) {
                   console.error("Failed to initialize log data for", exercise.name);
-                  return; // Skip rendering this exercise if init failed
+                  return; // Skip rendering this exercise card
               }
          }
 
-         // Determine the name to display (original or substitution)
+         // Determine the name to display (use substitution if available)
          const displayExerciseName = currentLogData.substitutionUsed || exercise.name;
 
-        // Create exercise card container
+        // Create the main card container
         const card = document.createElement('div');
         card.classList.add('exercise-card', 'rounded-lg', 'shadow-sm', 'overflow-hidden', 'border');
-         // Apply 'completed' class or default background/border based on state
+         // Apply 'completed' styling or default styling
          if (currentLogData.completed) {
              card.classList.add('completed');
          } else {
              card.classList.add('bg-white', 'dark:bg-gray-800', 'border-gray-200', 'dark:border-gray-600');
          }
-        card.dataset.exerciseName = exercise.name; // Use original name for data linking
+        card.dataset.exerciseName = exercise.name; // Link card to original exercise name for data lookup
 
         // --- Card Header ---
         const headerDiv = document.createElement('div');
         headerDiv.className = 'p-4 bg-gray-50 dark:bg-gray-700 border-b border-gray-200 dark:border-gray-600';
 
         const headerFlex = document.createElement('div');
-        headerFlex.className = 'flex justify-between items-start gap-4';
+        headerFlex.className = 'flex justify-between items-start gap-4'; // `items-start` aligns checkbox better
 
         const headerText = document.createElement('div');
-        headerText.className = 'flex-1'; // Allow text to take up space
+        headerText.className = 'flex-1'; // Allow text section to grow
 
-        // Exercise Title (with badges)
+        // Exercise Title (with conditional badges)
         const title = document.createElement('h3');
-        title.className = 'text-lg font-semibold flex items-center flex-wrap gap-2 text-gray-900 dark:text-gray-100'; // Allow wrapping
+        title.className = 'text-lg font-semibold flex items-center flex-wrap gap-2 text-gray-900 dark:text-gray-100'; // `flex-wrap` allows badges to wrap
         // Add badges conditionally
         if (exercise.isSuperset) title.innerHTML += `<span class="text-xs font-bold text-blue-600 bg-blue-100 dark:bg-blue-900 dark:text-blue-200 px-1.5 py-0.5 rounded">${exercise.isSuperset}</span>`;
-        title.innerHTML += `<span class="break-words">${displayExerciseName}</span>`; // Allow name to break
+        title.innerHTML += `<span class="break-words">${displayExerciseName}</span>`; // Use display name, allow wrapping
         if (exercise.isHeavy) title.innerHTML += `<span class="text-xs font-bold text-red-600 bg-red-100 dark:bg-red-900 dark:text-red-200 px-1.5 py-0.5 rounded whitespace-nowrap">PESADO</span>`;
         if (exercise.isBackoff) title.innerHTML += `<span class="text-xs font-bold text-yellow-600 bg-yellow-100 dark:bg-yellow-900 dark:text-yellow-200 px-1.5 py-0.5 rounded whitespace-nowrap">DESCARGA</span>`;
         if (exercise.isPerLeg) title.innerHTML += `<span class="text-xs font-bold text-purple-600 bg-purple-100 dark:bg-purple-900 dark:text-purple-200 px-1.5 py-0.5 rounded whitespace-nowrap">POR PIERNA</span>`;
@@ -420,8 +477,9 @@ const renderExercises = () => {
         // Exercise Description (Sets, Reps, RPE, Rest)
         const description = document.createElement('div');
         description.className = 'text-sm text-gray-600 dark:text-gray-400 mt-1 flex flex-wrap gap-x-3 gap-y-1'; // Allow wrapping
+        const numDisplaySets = exercise.sets * (exercise.isPerLeg || exercise.isPerArm ? 2 : 1); // Calculate displayed sets
         description.innerHTML = `
-            <span class="flex items-center gap-1">${ICONS.target} Sets: ${exercise.sets * (exercise.isPerLeg || exercise.isPerArm ? 2 : 1)}</span>
+            <span class="flex items-center gap-1">${ICONS.target} Sets: ${numDisplaySets}</span>
             <span class="flex items-center gap-1">${ICONS.repeat} Reps: ${exercise.reps}</span>
             <span class="flex items-center gap-1">${ICONS.dumbbell} RPE: ${exercise.rpe}</span>
             <span class="flex items-center gap-1">${ICONS.clock} Descanso: ${exercise.rest}</span>
@@ -430,14 +488,14 @@ const renderExercises = () => {
         headerText.appendChild(title);
         headerText.appendChild(description);
 
-        // Exercise Notes
+        // Exercise Notes (if available)
         if (exercise.notes) {
             const notesP = document.createElement('p');
-            notesP.className = 'text-xs text-gray-500 dark:text-gray-400 mt-2 italic flex items-start gap-1'; // items-start to align icon properly
+            notesP.className = 'text-xs text-gray-500 dark:text-gray-400 mt-2 italic flex items-start gap-1'; // `items-start` for icon alignment
             notesP.innerHTML = `${ICONS.info}<span>${exercise.notes}</span>`;
             headerText.appendChild(notesP);
         }
-        // Dropset Indicator
+        // Dropset Indicator (if applicable)
         if (exercise.hasDropset || exercise.hasDropsetLast) {
             const dropsetP = document.createElement('p');
             dropsetP.className = 'text-xs text-orange-600 dark:text-orange-400 mt-1 font-medium';
@@ -452,23 +510,26 @@ const renderExercises = () => {
         exerciseCheckbox.checked = currentLogData.completed;
         exerciseCheckbox.ariaLabel = `Marcar ${displayExerciseName} como completado`;
 
+        // Assemble Header Flexbox
         headerFlex.appendChild(headerText);
         headerFlex.appendChild(exerciseCheckbox);
         headerDiv.appendChild(headerFlex);
 
-         // Substitution Select Dropdown (if applicable)
+         // Substitution Select Dropdown (if substitutions are defined)
          if (exercise.substitution1 || exercise.substitution2) {
              const subDiv = document.createElement('div');
-             subDiv.className = 'mt-3'; // Add some space
+             subDiv.className = 'mt-3'; // Spacing
              const select = document.createElement('select');
-             select.className = 'substitution-select w-full md:w-[250px] h-8 text-xs border rounded-md focus:ring-blue-500 focus:border-blue-500 bg-white dark:bg-gray-600 border-gray-300 dark:border-gray-500 text-gray-800 dark:text-gray-100';
+             // Styling for the dropdown
+             select.className = 'substitution-select w-full md:w-auto max-w-[300px] h-8 text-xs border rounded-md focus:ring-blue-500 focus:border-blue-500 bg-white dark:bg-gray-600 border-gray-300 dark:border-gray-500 text-gray-800 dark:text-gray-100 px-2';
+             // Populate options
              select.innerHTML = `
                  <option value="" ${!currentLogData.substitutionUsed ? 'selected' : ''}>Usar: ${exercise.name}</option>
-                 ${exercise.substitution1 ? `<option value="${exercise.substitution1}" ${currentLogData.substitutionUsed === exercise.substitution1 ? 'selected' : ''}>Sustituir por: ${exercise.substitution1}</option>` : ''}
-                 ${exercise.substitution2 ? `<option value="${exercise.substitution2}" ${currentLogData.substitutionUsed === exercise.substitution2 ? 'selected' : ''}>Sustituir por: ${exercise.substitution2}</option>` : ''}
+                 ${exercise.substitution1 ? `<option value="${exercise.substitution1}" ${currentLogData.substitutionUsed === exercise.substitution1 ? 'selected' : ''}>Sustituir: ${exercise.substitution1}</option>` : ''}
+                 ${exercise.substitution2 ? `<option value="${exercise.substitution2}" ${currentLogData.substitutionUsed === exercise.substitution2 ? 'selected' : ''}>Sustituir: ${exercise.substitution2}</option>` : ''}
              `;
              subDiv.appendChild(select);
-             headerDiv.appendChild(subDiv); // Add it below the main header content
+             headerDiv.appendChild(subDiv); // Add dropdown below the main header content
          }
 
 
@@ -480,9 +541,10 @@ const renderExercises = () => {
         if (Array.isArray(currentLogData.sets)) {
             currentLogData.sets.forEach((set, setIdx) => {
                 const setRow = document.createElement('div');
-                // Apply 'completed' class or default background based on set state
+                // Apply styling based on completion status
                 setRow.className = `set-row flex flex-wrap items-center gap-2 p-2 rounded ${set.completed ? 'completed' : 'bg-gray-50 dark:bg-gray-700'}`;
 
+                // Create the HTML structure for the set row
                 setRow.innerHTML = `
                     <span class="font-medium text-sm w-10 text-center text-gray-600 dark:text-gray-300 flex-shrink-0">Set ${setIdx + 1}</span>
                     <input type="text" inputmode="decimal" placeholder="Peso (kg)" value="${set.weight}" class="set-input-weight h-8 text-sm w-24 flex-grow sm:flex-grow-0 border rounded-md px-2" data-set-index="${setIdx}" aria-label="Peso para ${displayExerciseName} set ${setIdx + 1}">
@@ -500,7 +562,7 @@ const renderExercises = () => {
             });
         } else {
             // Handle case where sets data is missing or invalid
-            contentDiv.innerHTML = `<p class="text-red-500 text-xs">Error al cargar sets.</p>`;
+            contentDiv.innerHTML = `<p class="text-red-500 text-xs">Error: No se pudieron cargar los sets para este ejercicio.</p>`;
         }
 
         // --- Notes Input ---
@@ -517,13 +579,14 @@ const renderExercises = () => {
         card.appendChild(headerDiv);
         card.appendChild(contentDiv);
 
-        // Append the card to the main container
+        // Append the fully constructed card to the main container
         exerciseListContainer.appendChild(card);
     });
 };
 
 const renderHistory = () => {
      historyListContainer.innerHTML = ''; // Clear previous history
+     // Display message if history is empty
      if (state.history.length === 0) {
          historyListContainer.innerHTML = '<p class="text-gray-500 dark:text-gray-400">Aún no has guardado ninguna rutina.</p>';
          return;
@@ -536,8 +599,9 @@ const renderHistory = () => {
          const card = document.createElement('div');
          card.classList.add('rounded-lg', 'shadow-sm', 'overflow-hidden', 'bg-white', 'dark:bg-gray-800', 'border', 'border-gray-200', 'dark:border-gray-600');
 
-         let dayDisplayName = getDisplayDayName(entry.day); // Get the display name
+         let dayDisplayName = getDisplayDayName(entry.day); // Get the display name for the day
 
+         // Build the HTML for the history card
          let entryHTML = `
              <div class="p-3 bg-gray-50 dark:bg-gray-700 border-b border-gray-200 dark:border-gray-600">
                  <p class="text-sm font-medium text-gray-800 dark:text-gray-100">
@@ -547,19 +611,23 @@ const renderHistory = () => {
              <div class="p-3 text-sm">
                  <ul class="space-y-1">`;
 
+         // Iterate through exercises saved in the history entry
          if (Array.isArray(entry.workout)) {
              entry.workout.forEach(ex => {
+                 // Display the name saved in the history entry (should be correct now)
+                 // Indicate if a substitution was used during that workout
+                 const displayName = ex.substitutionUsed ? `${ex.name} <span class='text-xs text-blue-500'>(Sust.)</span>` : ex.name;
                  entryHTML += `<li class="text-gray-700 dark:text-gray-300 py-1">
-                     <strong class='font-medium text-gray-900 dark:text-gray-100'>${ex.substitutionUsed ? `${ex.name} (Sust.)` : ex.name}:</strong>`; // Indicate if substitution was used
+                     <strong class='font-medium text-gray-900 dark:text-gray-100'>${displayName}:</strong>`;
 
-                 // Check if the exercise was marked completed but has no sets (e.g., bodyweight done)
+                 // Handle case where exercise was marked completed but has no sets logged
                  if (ex.completed && (!ex.sets || ex.sets.length === 0)) {
                      entryHTML += `<span class="text-green-600 dark:text-green-400 ml-1 text-xs">(Completado)</span>`;
                  }
 
-                 // Display sets if they exist
+                 // Display logged sets if they exist
                  if (Array.isArray(ex.sets) && ex.sets.length > 0) {
-                     entryHTML += `<span class="ml-1 block sm:inline">`; // Allow sets to wrap on small screens
+                     entryHTML += `<span class="ml-1 block sm:inline">`; // Allow sets to wrap
                      ex.sets.forEach(s => {
                          // Style completed sets differently
                          const setClass = s.completed ? 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200' : 'bg-gray-100 text-gray-700 dark:bg-gray-600 dark:text-gray-200';
@@ -570,9 +638,11 @@ const renderHistory = () => {
                      entryHTML += `</span>`;
                  }
 
-                 // Display notes if they exist
+                 // Display notes if they were saved
                  if (ex.notes) {
-                     entryHTML += `<span class="text-xs italic text-gray-500 dark:text-gray-400 block ml-4 mt-1">Nota: ${ex.notes}</span>`;
+                     // Basic sanitization for notes display (prevent potential HTML injection)
+                     const sanitizedNotes = ex.notes.replace(/</g, "&lt;").replace(/>/g, "&gt;");
+                     entryHTML += `<span class="text-xs italic text-gray-500 dark:text-gray-400 block ml-4 mt-1">Nota: ${sanitizedNotes}</span>`;
                  }
                  entryHTML += `</li>`;
              });
@@ -591,16 +661,18 @@ const renderTimer = () => {
     if (!timerRunning) {
         timerDisplayContainer.innerHTML = ''; // Clear the timer display
         document.querySelectorAll('.start-timer-btn').forEach(btn => btn.disabled = false); // Re-enable all start buttons
+        timerDisplayContainer.dataset.timerActive = 'false'; // Update state indicator
         return;
     }
 
     // If timer is running (or paused but not finished), disable start buttons
     document.querySelectorAll('.start-timer-btn').forEach(btn => btn.disabled = true);
 
-    // Check if the timer display needs to be created or updated (structure change for pause/resume)
+    // Check if the timer display needs a structural update (e.g., switching pause/resume button)
     const needsReRender = !timerDisplayContainer.firstChild || timerDisplayContainer.dataset.timerActive !== String(state.timer.active);
 
     if (needsReRender) {
+        // Create the timer card HTML structure
         timerDisplayContainer.innerHTML = `
             <div class="timer-card p-3 bg-white dark:bg-gray-800 bg-opacity-95 dark:bg-opacity-95 backdrop-blur-sm shadow-xl border border-blue-200 dark:border-blue-700 rounded-lg max-w-md mx-auto">
                 <div class="flex items-center justify-between gap-3">
@@ -623,7 +695,7 @@ const renderTimer = () => {
                 </div>
             </div>
         `;
-        // Store the current active state in the dataset for comparison next time
+        // Store the current active state in the dataset for future comparisons
         timerDisplayContainer.dataset.timerActive = String(state.timer.active);
 
         // Add event listeners to the newly created buttons
@@ -641,147 +713,149 @@ const renderTimer = () => {
          if (timerTimeElement) {
              timerTimeElement.textContent = `Descanso: ${formatTime(state.timer.seconds)}`;
          }
+         // Update progress bar width smoothly
          if (progressBarElement) {
-             progressBarElement.style.width = `${state.timer.duration > 0 ? (state.timer.seconds / state.timer.duration) * 100 : 0}%`;
+             // Calculate percentage, ensuring no division by zero
+             const percentage = state.timer.duration > 0 ? (state.timer.seconds / state.timer.duration) * 100 : 0;
+             progressBarElement.style.width = `${percentage}%`;
          }
     }
 };
 
-// Helper to get display name for the day
+// Helper to get display name for the day key
 const getDisplayDayName = (dayKey) => {
     switch(dayKey) {
         case 'upperA': return 'Tren Superior A';
         case 'lowerA': return 'Tren Inferior A';
         case 'upperB': return 'Tren Superior B';
         case 'lowerB': return 'Tren Inferior B';
-        default: return 'Desconocido';
+        default: return 'Desconocido'; // Fallback for unexpected keys
     }
 }
 
+// Function to update the entire UI based on the current state
 const updateUI = () => {
     // Update main title with week and day name
     mainTitle.innerHTML = `Semana ${state.currentWeek} <span class="text-base font-normal text-gray-600 dark:text-gray-400">(${getDisplayDayName(state.currentDay)})</span>`;
 
-    // Update active tab button
+    // Update active tab button styling
     Object.keys(tabButtons).forEach(key => {
+        // Use optional chaining in case a button element is missing
         tabButtons[key]?.classList.toggle('active', state.currentDay === key);
     });
 
-    // Enable/disable week navigation buttons
+    // Enable/disable week navigation buttons based on current week
     const maxWeek = program.length > 0 ? Math.max(...program.map(p => p.week)) : 1;
     prevWeekBtn.disabled = state.currentWeek <= 1;
     nextWeekBtn.disabled = state.currentWeek >= maxWeek;
 
     // Re-render dynamic parts of the UI
-    renderExercises();
-    renderHistory();
-    renderTimer(); // Ensure timer display is updated
+    renderExercises(); // Render the list of exercises for the current day/week
+    renderHistory();   // Render the workout history list
+    renderTimer();     // Render or update the timer display
 };
 
 
 // --- Timer Logic ---
 const startTimer = (durationInSeconds) => {
-     // Clear any existing interval
+     // Clear any existing interval to prevent multiple timers running
      if (state.timer.intervalId) {
          clearInterval(state.timer.intervalId);
      }
 
-     // Validate and set duration
+     // Validate and set duration (ensure it's a non-negative number)
      const validDuration = Number.isFinite(durationInSeconds) && durationInSeconds >= 0 ? durationInSeconds : 90; // Default to 90s if invalid
      state.timer.duration = validDuration;
      state.timer.seconds = validDuration; // Start countdown from full duration
      state.timer.active = true; // Mark timer as active
 
-     // Start the interval timer
-     state.timer.intervalId = setInterval(timerTick, 1000); // Tick every second
+     // Start the interval timer, calling timerTick every 1000ms (1 second)
+     state.timer.intervalId = setInterval(timerTick, 1000);
 
-     // Update the UI immediately
+     // Update the UI immediately to show the timer has started
      renderTimer();
 };
 
 const pauseTimer = () => {
     state.timer.active = false; // Mark timer as inactive
-    // Clear the interval so timerTick stops running
+    // Clear the interval so timerTick stops being called
     if (state.timer.intervalId) {
         clearInterval(state.timer.intervalId);
-        state.timer.intervalId = null;
+        state.timer.intervalId = null; // Clear the interval ID
     }
-    // Update UI to show resume button etc.
+    // Update UI to reflect the paused state (e.g., show resume button)
     renderTimer();
 };
 
 const resumeTimer = () => {
-    // Only resume if timer is paused and there's time left
+    // Only resume if timer is currently paused and there's time remaining
     if (!state.timer.active && state.timer.seconds > 0) {
         state.timer.active = true; // Mark as active again
         // Clear any residual interval just in case, then start a new one
         if (state.timer.intervalId) clearInterval(state.timer.intervalId);
         state.timer.intervalId = setInterval(timerTick, 1000);
-        // Update UI to show pause button etc.
+        // Update UI to reflect the resumed state (e.g., show pause button)
         renderTimer();
     }
 };
 
 const resetTimer = () => {
-     state.timer.active = false; // Stop the timer
+     state.timer.active = false; // Stop the timer if it's running
      // Clear the interval
      if (state.timer.intervalId) {
          clearInterval(state.timer.intervalId);
          state.timer.intervalId = null;
      }
-     // Reset seconds to the original duration (or 0 if duration was 0)
+     // Reset seconds back to the original duration for the last started timer
      state.timer.seconds = state.timer.duration;
-     // Update UI (will show the reset time, paused state)
+     // Update UI to show the reset time in a paused state
+     // If duration was 0, seconds will be 0, and the next render will clear it.
      renderTimer();
-     // Immediately call renderTimer again after a short delay to potentially clear it if duration was 0
-     // Or simply call updateUI which includes renderTimer and enables buttons if needed
-     // A better approach: if seconds become 0 after reset, the next render will clear it.
-     // For now, just render the reset state. If duration was 0, it stays 0.
 };
 
 const timerTick = () => {
-    if (!state.timer.active) return; // Do nothing if paused
+    if (!state.timer.active) return; // Exit if the timer is paused
 
-    state.timer.seconds--; // Decrement seconds
+    state.timer.seconds--; // Decrement the remaining seconds
 
     if (state.timer.seconds <= 0) {
-        // Timer finished
-        state.timer.seconds = 0; // Ensure it doesn't go negative
-        state.timer.active = false; // Mark as inactive
-        // Clear the interval
+        // Timer has finished
+        state.timer.seconds = 0; // Ensure it doesn't display negative time
+        state.timer.active = false; // Mark timer as inactive
+        // Clear the interval timer
         if (state.timer.intervalId) {
             clearInterval(state.timer.intervalId);
             state.timer.intervalId = null;
         }
 
-        // Notify user and play sound
+        // Notify user and play a sound
         showNotification('¡Tiempo de descanso terminado!', 'info');
-        try { // Play sound with increased volume using Web Audio API for better control
+        try { // Use Web Audio API for better sound control and reliability
             const audioContext = new (window.AudioContext || window.webkitAudioContext)();
             const oscillator = audioContext.createOscillator();
-            const gainNode = audioContext.createGain(); // Control volume
+            const gainNode = audioContext.createGain(); // To control volume
 
             oscillator.connect(gainNode);
             gainNode.connect(audioContext.destination);
 
-            oscillator.type = 'sine'; // Simple tone
-            oscillator.frequency.setValueAtTime(660, audioContext.currentTime); // A slightly higher pitch (A5)
-            gainNode.gain.setValueAtTime(0.9, audioContext.currentTime); // Set volume (0.0 to 1.0) - Increased!
-            // Fade out quickly
+            oscillator.type = 'sine'; // A simple, clean tone
+            oscillator.frequency.setValueAtTime(660, audioContext.currentTime); // Frequency (pitch) in Hz (A5 note)
+            gainNode.gain.setValueAtTime(0.9, audioContext.currentTime); // Volume (0.0 to 1.0) - Increased volume
+            // Fade out the sound quickly for a short beep effect
             gainNode.gain.exponentialRampToValueAtTime(0.001, audioContext.currentTime + 0.5);
 
-            oscillator.start(audioContext.currentTime);
-            oscillator.stop(audioContext.currentTime + 0.5); // Play for 0.5 seconds
+            oscillator.start(audioContext.currentTime); // Start the sound now
+            oscillator.stop(audioContext.currentTime + 0.5); // Stop the sound after 0.5 seconds
         } catch (e) {
             console.error("Web Audio API failed:", e);
-            // Fallback or ignore sound error
+            // Sound playback is non-critical, so just log the error
         }
 
-         // Update UI (this will clear the timer display and re-enable buttons)
-         renderTimer(); // Call renderTimer, which will see seconds=0 and active=false, clearing the display
+         // Update the UI. Since seconds are 0 and active is false, renderTimer will clear the display
+         renderTimer();
 
     } else {
-         // Timer still ticking, just update the display
+         // Timer is still ticking, just update the displayed time and progress bar
          renderTimer();
     }
 };
@@ -790,27 +864,28 @@ const timerTick = () => {
 // --- Event Handlers ---
 const handleWeekChange = (direction) => {
      const newWeek = state.currentWeek + direction;
+    // Determine the maximum week number from the program data
     const maxWeek = program.length > 0 ? Math.max(...program.map(p => p.week)) : 1;
-    // Check bounds
+    // Check if the new week is within the valid range (1 to maxWeek)
     if (newWeek >= 1 && newWeek <= maxWeek) {
         state.currentWeek = newWeek;
-        // Reset timer and load data for the new week/day
-        pauseTimer(); // Ensure timer stops
-        state.timer.seconds = 0; // Reset timer display
-        loadWorkoutLog(); // Load log for the new context
-        updateUI(); // Update the entire interface
+        // When changing week, reset the timer and load the log for the new context
+        pauseTimer(); // Ensure timer stops if running
+        state.timer.seconds = 0; // Reset timer display value
+        loadWorkoutLog(); // Load log data for the new week (and current day)
+        updateUI(); // Update the entire interface to reflect the changes
     }
 };
 
 const handleDayChange = (day) => {
-     // Only update if the day actually changed
+     // Only proceed if the selected day is different from the current day
      if (day !== state.currentDay) {
         state.currentDay = day;
-        // Reset timer and load data for the new day
-        pauseTimer(); // Ensure timer stops
-        state.timer.seconds = 0; // Reset timer display
-        loadWorkoutLog(); // Load log for the new context
-        updateUI(); // Update the entire interface
+        // When changing day, reset the timer and load the log for the new context
+        pauseTimer(); // Ensure timer stops if running
+        state.timer.seconds = 0; // Reset timer display value
+        loadWorkoutLog(); // Load log data for the new day (and current week)
+        updateUI(); // Update the entire interface to reflect the changes
     }
 };
 
@@ -821,195 +896,201 @@ const handleSetInputChange = (exerciseName, setIndex, field, value) => {
         : (value === '' || /^\d*$/.test(value));      // Only digits for reps
 
      if (!isValidInput) {
-         // Maybe show a quick, non-blocking warning or just ignore invalid chars?
-         // For now, just prevent updating state with invalid format.
-         // The blur handler will provide more robust feedback.
-         console.warn(`Invalid input ignored for ${field}: ${value}`);
+         // Prevent updating state with invalid format.
+         // More robust feedback is handled by the blur handler.
+         console.warn(`Invalid input format ignored for ${field}: ${value}`);
          return;
      }
 
-     // Update the state if the log entry exists
+     // Update the state if the log entry and set index are valid
      if (state.workoutLog[exerciseName]?.sets?.[setIndex] !== undefined) {
          state.workoutLog[exerciseName].sets[setIndex][field] = value;
-         saveWorkoutLog(); // Save changes to localStorage
+         saveWorkoutLog(); // Persist changes to localStorage immediately
      } else {
-         console.error(`Log error: Could not find state.workoutLog[${exerciseName}].sets[${setIndex}]`);
+         // Log an error if the state structure is unexpectedly missing
+         console.error(`Log error: Could not find state.workoutLog[${exerciseName}].sets[${setIndex}] to update ${field}.`);
      }
 };
 
 const handleSetCompletionToggle = (exerciseName, setIndex) => {
-     // Check if the set exists in the log
+     // Check if the set exists in the log state
      if (state.workoutLog[exerciseName]?.sets?.[setIndex] !== undefined) {
          const currentSet = state.workoutLog[exerciseName].sets[setIndex];
-         currentSet.completed = !currentSet.completed; // Toggle completion status
+         currentSet.completed = !currentSet.completed; // Toggle the completion status
 
-         // Check if all sets for this exercise are now completed
+         // Check if all sets for this exercise are now completed to update the overall status
          const allSetsCompleted = state.workoutLog[exerciseName].sets.every(set => set.completed);
-         state.workoutLog[exerciseName].completed = allSetsCompleted; // Update overall exercise completion
+         state.workoutLog[exerciseName].completed = allSetsCompleted; // Update overall exercise completion status
 
-         saveWorkoutLog(); // Save changes
+         saveWorkoutLog(); // Save the updated state
 
-         // Update UI for this specific set and the overall exercise card
+         // Update the UI elements corresponding to this set and exercise
          const card = document.querySelector(`.exercise-card[data-exercise-name="${exerciseName}"]`);
          if (card) {
              // Update the specific set row's appearance
              const setRow = card.querySelectorAll('.set-row')[setIndex];
              if (setRow) {
                  setRow.classList.toggle('completed', currentSet.completed);
-                 // Ensure checkbox reflects state (though it should trigger this)
+                 // Ensure the checkbox visually reflects the state
                  const setCheckbox = setRow.querySelector('.set-completion-checkbox');
                  if (setCheckbox) setCheckbox.checked = currentSet.completed;
              }
-             // Update the overall card appearance and main checkbox
+             // Update the overall card appearance and its main checkbox
              card.classList.toggle('completed', allSetsCompleted);
              const exerciseCheckbox = card.querySelector('.exercise-completion-checkbox');
              if (exerciseCheckbox) exerciseCheckbox.checked = allSetsCompleted;
          }
      } else {
-         console.error(`Log error: Could not find state.workoutLog[${exerciseName}].sets[${setIndex}]`);
+         console.error(`Log error: Could not find state.workoutLog[${exerciseName}].sets[${setIndex}] to toggle completion.`);
      }
 };
 
 const handleExerciseCompletionToggle = (exerciseName) => {
-     // Check if the exercise exists in the log
+     // Check if the exercise exists in the log state
      if (state.workoutLog[exerciseName]) {
          const currentLog = state.workoutLog[exerciseName];
-         currentLog.completed = !currentLog.completed; // Toggle overall completion
+         currentLog.completed = !currentLog.completed; // Toggle the overall completion status
 
-         // Mark/unmark all individual sets based on the overall toggle
+         // Mark/unmark all individual sets based on the overall toggle action
          if (Array.isArray(currentLog.sets)) {
              currentLog.sets.forEach(set => set.completed = currentLog.completed);
          }
 
-         saveWorkoutLog(); // Save changes
+         saveWorkoutLog(); // Save the updated state
 
-         // Update UI for the entire card
+         // Update the UI for the entire card to reflect the change
          const card = document.querySelector(`.exercise-card[data-exercise-name="${exerciseName}"]`);
           if (card) {
               card.classList.toggle('completed', currentLog.completed);
               // Update all set rows within the card
               card.querySelectorAll('.set-row').forEach(row => {
                   row.classList.toggle('completed', currentLog.completed);
+                  // Ensure individual set checkboxes match the overall state
                   const setCheckbox = row.querySelector('.set-completion-checkbox');
                   if (setCheckbox) setCheckbox.checked = currentLog.completed;
               });
-              // Ensure the main checkbox reflects the state (though it should trigger this)
+              // Ensure the main exercise checkbox reflects the state
               const exerciseCheckbox = card.querySelector('.exercise-completion-checkbox');
               if (exerciseCheckbox) exerciseCheckbox.checked = currentLog.completed;
           }
      } else {
-         console.error(`Log error: Could not find state.workoutLog[${exerciseName}]`);
+         console.error(`Log error: Could not find state.workoutLog[${exerciseName}] to toggle overall completion.`);
      }
 };
 
 const handleNotesChange = (exerciseName, value) => {
-     // Update notes if the exercise exists in the log
+     // Update notes if the exercise exists in the log state
      if (state.workoutLog[exerciseName]) {
          state.workoutLog[exerciseName].notes = value;
-         saveWorkoutLog(); // Save changes
+         saveWorkoutLog(); // Save changes immediately
      } else {
-         console.error(`Log error: Could not find state.workoutLog[${exerciseName}]`);
+         console.error(`Log error: Could not find state.workoutLog[${exerciseName}] to update notes.`);
      }
 };
 
 const handleSubstitutionChange = (exerciseName, subValue) => {
-     // Update substitution if the exercise exists in the log
+     // Update substitution information if the exercise exists in the log state
      if (state.workoutLog[exerciseName]) {
-         state.workoutLog[exerciseName].substitutionUsed = subValue || null; // Store null if empty string (default option)
-         saveWorkoutLog(); // Save changes
-         updateUI(); // Re-render to show the new exercise name
+         // Store the selected substitution name, or null if the default option ("") is selected
+         state.workoutLog[exerciseName].substitutionUsed = subValue || null;
+         saveWorkoutLog(); // Save the change
+         updateUI(); // Re-render the UI to show the new exercise name in the card header
      } else {
-         console.error(`Log error: Could not find state.workoutLog[${exerciseName}]`);
+         console.error(`Log error: Could not find state.workoutLog[${exerciseName}] to update substitution.`);
      }
 };
 
 const handleSaveWorkout = () => {
-    // Get current date and time
+    // Get current date and time for the history entry
     const today = new Date();
     const formattedDate = today.toLocaleDateString('es-MX', { year: 'numeric', month: 'long', day: 'numeric' });
     const formattedTime = today.toLocaleTimeString('es-MX', { hour: '2-digit', minute: '2-digit' });
 
-    // Get the definition of exercises for the current day
+    // Get the definition of exercises for the current day/week
     const exercises = getCurrentExercises(state.currentWeek, state.currentDay);
     if (!exercises || exercises.length === 0) {
-        showNotification("No hay ejercicios definidos para guardar.", "error");
+        showNotification("No hay ejercicios definidos para guardar en este día.", "error");
         return;
     }
 
-    // Filter and format the logged data for saving
+    // Map through the *exercise definitions* but pull data from the *log*
     const exercisesToSave = exercises.map(exercise => {
-        const logData = state.workoutLog[exercise.name];
-        // Skip if no log data exists for this exercise definition
+        const logData = state.workoutLog[exercise.name]; // Get log data using original name as key
+        // If no log data exists for this defined exercise, skip it
         if (!logData) return null;
 
-        // Filter out sets that have no data and aren't marked completed
+        // Filter out sets that have no data AND aren't marked completed
         const loggedSets = Array.isArray(logData.sets)
             ? logData.sets.filter(set => set.weight || set.reps || set.completed)
             : [];
 
-        // Skip saving this exercise if it wasn't marked completed AND has no logged sets
+        // Skip saving this exercise if it wasn't marked completed AND has no actual set data logged
         if (loggedSets.length === 0 && !logData.completed) return null;
 
-        // Format the data to be saved
+        // *** CORRECTION HERE ***
+        // Use the substitution name if available, otherwise use the original name.
+        const nameToSave = logData.substitutionUsed || exercise.name;
+
+        // Format the data object to be saved in history
         return {
-            name: exercise.name, // Save the original name
+            name: nameToSave, // Use the corrected name
             completed: logData.completed,
             sets: loggedSets.map(s => ({
-                weight: s.weight || '0', // Default to '0' if empty
-                reps: s.reps || '0',     // Default to '0' if empty
+                weight: s.weight || '0', // Default empty weight to '0'
+                reps: s.reps || '0',     // Default empty reps to '0'
                 completed: s.completed
             })),
-            notes: logData.notes || '', // Include notes
-            substitutionUsed: logData.substitutionUsed || null, // Include substitution used
+            notes: logData.notes || '', // Include notes if they exist
+            substitutionUsed: logData.substitutionUsed || null, // Explicitly save which substitution was used (or null)
         };
-    }).filter(Boolean); // Remove null entries (exercises that were skipped)
+    }).filter(Boolean); // Remove any null entries resulting from skipped exercises
 
-    // Check if there's anything actually logged to save
+    // Check if there's anything actually logged to save after filtering
     if (exercisesToSave.length === 0) {
         showNotification("No se registró ningún dato o ejercicio completado para guardar.", "error");
         return;
     }
 
-    // Create the history entry
+    // Create the new history entry object
     const newEntry = {
-        id: Date.now(), // Use timestamp as a unique ID
+        id: Date.now(), // Use timestamp as a simple unique ID
         date: `${formattedDate} ${formattedTime}`,
         week: state.currentWeek,
-        day: state.currentDay, // Save the day key ('upperA', etc.)
-        workout: exercisesToSave
+        day: state.currentDay, // Save the day key ('upperA', 'lowerB', etc.)
+        workout: exercisesToSave // The array of processed exercises
     };
 
-    // Add to history (at the beginning for newest first) and save
+    // Add the new entry to the beginning of the history array and save to localStorage
     state.history.unshift(newEntry);
     saveHistory();
 
-    // Clear the current workout log from storage and state
+    // Clear the current workout log from storage and reset the state log
     clearWorkoutLogFromStorage();
-    state.workoutLog = initializeWorkoutLog(exercises); // Reset state log
+    state.workoutLog = initializeWorkoutLog(exercises); // Reset state log for the current day
 
     // Reset the timer
     pauseTimer();
     state.timer.seconds = 0;
 
-    // Notify user and update UI
-    showNotification("Rutina guardada exitosamente.", "success");
-    updateUI(); // Refresh the display (clears inputs, updates history)
+    // Notify the user of success and update the UI
+    showNotification("Rutina guardada exitosamente en el historial.", "success");
+    updateUI(); // Refresh display (clears inputs, updates history list, resets timer display)
 };
 
 const handleClearWorkout = () => {
-    // Confirm with the user
+    // Confirm with the user before clearing data
     if (window.confirm("¿Estás seguro de que quieres borrar todo el progreso de la rutina actual? Esta acción no se puede deshacer.")) {
         const exercises = getCurrentExercises(state.currentWeek, state.currentDay);
-        // Clear from storage first
+        // Clear the log from localStorage
         clearWorkoutLogFromStorage();
-        // Reset the state log
+        // Reset the workout log in the application state
         state.workoutLog = initializeWorkoutLog(exercises);
         // Reset the timer
         pauseTimer();
         state.timer.seconds = 0;
-        // Notify user and update UI
+        // Notify the user and update the UI
         showNotification("Progreso de la rutina actual borrado.", "info");
-        updateUI(); // Refresh the display (clears inputs)
+        updateUI(); // Refresh the display (clears inputs, resets timer display)
     }
 };
 
@@ -1022,7 +1103,7 @@ const addExerciseEventListeners = () => {
         const target = e.target;
         const card = target.closest('.exercise-card');
         if (!card) return; // Ignore events outside exercise cards
-        const exerciseName = card.dataset.exerciseName;
+        const exerciseName = card.dataset.exerciseName; // Get original name for lookup
         if (!exerciseName) return; // Ignore if card has no name data
 
         if (target.matches('.set-input-weight, .set-input-reps')) {
@@ -1039,7 +1120,7 @@ const addExerciseEventListeners = () => {
         const target = e.target;
         const card = target.closest('.exercise-card');
         if (!card) return;
-        const exerciseName = card.dataset.exerciseName;
+        const exerciseName = card.dataset.exerciseName; // Get original name for lookup
         if (!exerciseName) return;
 
         if (target.matches('.set-completion-checkbox')) {
@@ -1058,11 +1139,12 @@ const addExerciseEventListeners = () => {
         const target = e.target.closest('.start-timer-btn');
         if (target) {
             const restTime = parseInt(target.dataset.restTime, 10);
-            if (!isNaN(restTime)) { // Ensure restTime is a valid number
+            // Start timer only if restTime is a valid number
+            if (!isNaN(restTime)) {
                  startTimer(restTime);
             } else {
-                 console.warn("Invalid rest time data:", target.dataset.restTime);
-                 startTimer(90); // Fallback to default if data is bad
+                 console.warn("Invalid rest time data found on button:", target.dataset.restTime);
+                 startTimer(90); // Fallback to default rest time if data is invalid
             }
         }
     });
@@ -1072,41 +1154,46 @@ const addExerciseEventListeners = () => {
         const target = e.target;
         const card = target.closest('.exercise-card');
         if (!card) return;
-        const exerciseName = card.dataset.exerciseName;
-        if (!exerciseName || !state.workoutLog[exerciseName]) return; // Check log exists too
+        const exerciseName = card.dataset.exerciseName; // Get original name for lookup
+        // Ensure log data exists before trying to access it
+        if (!exerciseName || !state.workoutLog[exerciseName]) return;
 
         if (target.matches('.set-input-weight')) {
             const setIndex = parseInt(target.dataset.setIndex, 10);
             const value = target.value;
+            // Validate weight format (allow empty, numbers, optional single decimal)
             const isValid = value === '' || /^\d*\.?\d*$/.test(value);
             if (!isValid && value !== '') {
-                // Revert to stored value if invalid input is left on blur
+                // If invalid format is left on blur, revert to the stored value
                 target.value = state.workoutLog[exerciseName]?.sets[setIndex]?.weight || '';
                 showNotification(`Peso inválido introducido: "${value}". Use solo números y un punto decimal opcional.`, 'error', 4000);
             } else if (value.endsWith('.')) {
                 // If input ends with a decimal point on blur, remove it and update state
                 target.value = value.slice(0, -1);
+                // Trigger state update with the corrected value
                 handleSetInputChange(exerciseName, setIndex, 'weight', target.value);
             }
         } else if (target.matches('.set-input-reps')) {
             const setIndex = parseInt(target.dataset.setIndex, 10);
             const value = target.value;
-            const isValid = value === '' || /^\d+$/.test(value); // Must be whole number
+            // Validate reps format (allow empty or whole numbers only)
+            const isValid = value === '' || /^\d+$/.test(value);
             if (!isValid && value !== '') {
-                // Revert to stored value if invalid input is left on blur
+                // If invalid format is left on blur, revert to the stored value
                 target.value = state.workoutLog[exerciseName]?.sets[setIndex]?.reps || '';
                 showNotification(`Número de repeticiones inválido: "${value}". Use solo números enteros.`, 'error', 4000);
             }
         }
-    }, true); // Use capture phase to catch blur before it bubbles away
+    }, true); // Use capture phase to catch blur event reliably
 };
 
 const addGlobalEventListeners = () => {
-    // Null check buttons before adding listeners
+    // Add event listeners to global controls, with null checks for robustness
+
     prevWeekBtn?.addEventListener('click', () => handleWeekChange(-1));
     nextWeekBtn?.addEventListener('click', () => handleWeekChange(1));
 
-    // Add listeners for all tab buttons
+    // Add listeners for all tab buttons using the tabButtons object
     Object.keys(tabButtons).forEach(dayKey => {
         tabButtons[dayKey]?.addEventListener('click', () => handleDayChange(dayKey));
     });
@@ -1114,20 +1201,21 @@ const addGlobalEventListeners = () => {
     saveWorkoutBtn?.addEventListener('click', handleSaveWorkout);
     clearWorkoutBtn?.addEventListener('click', handleClearWorkout);
 
-    // Add listener for dark mode toggle
+    // Add listener for dark mode toggle button
     darkModeToggle?.addEventListener('click', toggleDarkMode);
 };
 
 // --- Initialization ---
+// Function to set up and run the application
 const initializeApp = () => {
-    loadDarkModePreference(); // Load dark mode preference first
-    loadHistory();          // Load saved history
-    loadWorkoutLog();       // Load current workout state (or initialize)
-    addGlobalEventListeners(); // Set up buttons, tabs, etc.
-    addExerciseEventListeners(); // Set up listeners for dynamic exercise content
-    updateUI();             // Initial render of the application
+    loadDarkModePreference(); // Apply dark/light mode based on preference/system
+    loadHistory();          // Load saved workout history from localStorage
+    loadWorkoutLog();       // Load current workout state for today/week from localStorage (or initialize)
+    addGlobalEventListeners(); // Set up listeners for global buttons and tabs
+    addExerciseEventListeners(); // Set up delegated listeners for dynamic exercise content
+    updateUI();             // Perform the initial render of the application interface
 };
 
 // --- Run App ---
-// Wait for the DOM to be fully loaded before initializing
+// Wait for the DOM to be fully loaded before initializing the application
 document.addEventListener('DOMContentLoaded', initializeApp);
