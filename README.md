@@ -32,6 +32,13 @@ Esta es una aplicación web simple para registrar y seguir un programa de entren
 13. El historial de rutinas guardadas se muestra en la parte inferior de la página.
 14. Usa el botón de sol/luna para cambiar entre modo claro y oscuro.
 
+## Despliegue en GitHub Pages
+
+1.  Asegúrate de tener los archivos `index.html`, `style.css`, y `script.js` en la raíz de tu repositorio de GitHub.
+2.  Ve a la configuración de tu repositorio (`Settings`).
+3.  En la sección "Pages" (o "GitHub Pages"), selecciona la rama desde la que quieres desplegar (normalmente `main` o `master`) y la carpeta raíz (`/root`).
+4.  Guarda los cambios. GitHub te proporcionará una URL donde tu aplicación estará activa (puede tardar unos minutos).
+
 ## Tecnologías Utilizadas
 
 * HTML5

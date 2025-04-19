@@ -75,7 +75,7 @@ html.dark .tab-button.active {
       color: #1f2937; /* text-gray-800 */
  }
   html.dark input[type=text], html.dark input[type=number], html.dark select {
-      background-color: #4b5563; /* dark:bg-gray-600 */
+      background-color: #374151; /* dark:bg-gray-600 */
       border-color: #6b7280; /* dark:border-gray-500 */
       color: #f9fafb; /* dark:text-gray-50 */
   }
@@ -86,6 +86,15 @@ html.dark .tab-button.active {
         background-color: #4b5563; /* Match select background */
         color: #f9fafb;
    }
+/* Mejoras de foco para accesibilidad */
+input:focus, select:focus, button:focus {
+    outline: 2px solid #3b82f6;
+    outline-offset: 2px;
+}
+html.dark input:focus, html.dark select:focus, html.dark button:focus {
+    outline: 2px solid #60a5fa;
+}
+
 /* Sticky timer */
 #timer-display-container {
     position: sticky;
@@ -105,3 +114,8 @@ html.dark .tab-button.active {
 input[type=number]::-webkit-inner-spin-button,
 input[type=number]::-webkit-outer-spin-button { -webkit-appearance: none; margin: 0; }
 input[type=number] { -moz-appearance: textfield; }
+
+/* Scroll suave para toda la página */
+html {
+    scroll-behavior: smooth;
+}
